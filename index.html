@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Étudio — Comprends vraiment tes cours</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+  :root{
+    --ink:#1C2541;
+    --ink-soft:#3B4566;
+    --paper:#EDE8DE;
+    --paper-alt:#E3DCCB;
+    --paper-white:#F7F4EC;
+    --highlighter:#F2C438;
+    --sage:#4F7A57;
+    --sage-bg:#E3EDDF;
+    --brick:#AE3B31;
+    --brick-bg:#F3DEDA;
+    --line:#C9C2AE;
+    --radius: 3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    font-size:16px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.serif{ font-family:'Source Serif 4',serif; color:var(--ink); margin:0; }
+  button{ font-family:inherit; cursor:pointer; }
+  ::selection{ background:var(--highlighter); color:var(--ink); }
+  a{ color:inherit; }
+
+  #app{ display:flex; min-height:100vh; }
+
+  .binder{
+    width:280px; flex-shrink:0;
+    background:var(--paper-alt);
+    border-right:1px solid var(--line);
+    display:flex; flex-direction:column;
+    padding:28px 20px;
+  }
+  .brand{ display:flex; align-items:baseline; gap:8px; margin-bottom:4px; }
+  .brand .mark{ width:14px;height:14px; background:var(--highlighter); border:1.5px solid var(--ink); transform:rotate(-6deg); flex-shrink:0; }
+  .brand h1{ font-size:22px; font-weight:600; letter-spacing:-0.01em; }
+  .tagline{ font-size:13px; color:var(--ink-soft); margin:2px 0 28px 22px; }
+  .course-list{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:4px; overflow-y:auto; flex:1; }
+  .course-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 12px; border-radius:var(--radius); cursor:pointer; border:1px solid transparent; font-size:14.5px; color:var(--ink-soft); }
+  .course-item:hover{ background:rgba(28,37,65,0.05); }
+  .course-item.active{ background:var(--paper-white); border-color:var(--line); color:var(--ink); font-weight:600; }
+  .course-item .title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .course-item .del{ opacity:0; background:none; border:none; color:var(--brick); font-size:16px; line-height:1; padding:2px 4px; flex-shrink:0; }
+  .course-item:hover .del{ opacity:0.6; }
+  .course-item .del:hover{ opacity:1; }
+
+  .add-btn{ margin-top:16px; width:100%; background:var(--ink); color:var(--paper-white); border:none; padding:12px 14px; border-radius:var(--radius); font-size:14.5px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .add-btn:hover{ background:#2A3660; }
+  .about-note{ margin-top:14px; font-size:12px; color:var(--ink-soft); line-height:1.5; text-align:center; }
+
+  main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+
+  .empty-state{ flex:1; display:flex; align-items:center; justify-content:center; padding:40px; }
+  .empty-card{
+    max-width:440px; text-align:left; background:var(--paper-white); border:1px solid var(--line); border-radius:var(--radius); padding:36px;
+    background-image: repeating-linear-gradient(var(--paper-white) 0px, var(--paper-white) 27px, var(--line) 28px);
+  }
+  .empty-card h2{ font-size:24px; margin-bottom:10px; }
+  .empty-card p{ color:var(--ink-soft); font-size:15px; margin-bottom:18px; }
+
+  .course-header{ padding:28px 40px 0 40px; border-bottom:1px solid var(--line); }
+  .course-header h2{ font-size:26px; margin-bottom:16px; padding-left:14px; border-left:3px solid var(--highlighter); }
+  .tabs{ display:flex; gap:4px; }
+  .tab{ background:none; border:none; padding:10px 4px; margin-right:22px; font-size:15px; font-weight:600; color:var(--ink-soft); border-bottom:2px solid transparent; }
+  .tab.active{ color:var(--ink); border-bottom-color:var(--highlighter); }
+
+  .content-pane{ flex:1; overflow-y:auto; padding:32px 40px 60px 40px; }
+
+  .loading-box{ max-width:520px; margin:60px auto; text-align:center; color:var(--ink-soft); }
+  .spinner{ width:34px;height:34px; margin:0 auto 18px auto; border-radius:50%; border:3px solid var(--line); border-top-color:var(--ink); animation:spin 0.8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .error-box{ max-width:520px; margin:40px auto; background:var(--brick-bg); border:1px solid var(--brick); color:var(--ink); padding:20px 22px; border-radius:var(--radius); font-size:14.5px; }
+  .error-box strong{ display:block; margin-bottom:6px; color:var(--brick); }
+
+  .overview{ font-family:'Source Serif 4',serif; font-size:19px; line-height:1.65; color:var(--ink); max-width:680px; margin-bottom:36px; }
+  .topic-block{ max-width:680px; margin-bottom:26px; padding-bottom:26px; border-bottom:1px dashed var(--line); }
+  .topic-block:last-child{ border-bottom:none; }
+  .topic-block h3{ font-size:17px; margin-bottom:10px; display:flex; align-items:baseline; gap:8px; }
+  .topic-block h3::before{ content:""; width:8px;height:8px; background:var(--highlighter); border:1px solid var(--ink); flex-shrink:0; transform:translateY(-1px); }
+  .topic-block ul{ margin:0; padding-left:20px; color:var(--ink-soft); font-size:15px; }
+  .topic-block li{ margin-bottom:6px; }
+
+  .quiz-progress{ max-width:640px; display:flex; align-items:center; gap:12px; margin-bottom:26px; font-size:13.5px; color:var(--ink-soft); }
+  .quiz-progress .bar{ flex:1; height:5px; background:var(--paper-alt); border-radius:3px; overflow:hidden; }
+  .quiz-progress .fill{ height:100%; background:var(--ink); }
+  .quiz-card{ max-width:640px; background:var(--paper-white); border:1px solid var(--line); border-radius:var(--radius); padding:30px; }
+  .quiz-card h3{ font-size:19px; margin-bottom:20px; line-height:1.4; font-family:'Source Serif 4',serif; font-weight:600; }
+  .quiz-card .blank{ background:var(--highlighter); padding:1px 8px; border-radius:2px; }
+  .option{ display:block; width:100%; text-align:left; background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); padding:13px 16px; margin-bottom:10px; font-size:15px; color:var(--ink); }
+  .option:hover:not(:disabled){ border-color:var(--ink); }
+  .option:disabled{ cursor:default; }
+  .option.correct{ background:var(--sage-bg); border-color:var(--sage); font-weight:600; }
+  .option.incorrect{ background:var(--brick-bg); border-color:var(--brick); }
+  .explanation{ margin-top:16px; padding:14px 16px; background:var(--paper); border-left:3px solid var(--ink); font-size:14.5px; color:var(--ink-soft); border-radius:0 var(--radius) var(--radius) 0; }
+  .next-btn{ margin-top:20px; background:var(--ink); color:var(--paper-white); border:none; padding:11px 22px; border-radius:var(--radius); font-size:14.5px; font-weight:600; }
+  .next-btn:hover{ background:#2A3660; }
+
+  .score-card{ max-width:480px; text-align:center; background:var(--paper-white); border:1px solid var(--line); border-radius:var(--radius); padding:44px 30px; }
+  .score-card .num{ font-family:'Source Serif 4',serif; font-size:52px; font-weight:600; }
+  .score-card p{ color:var(--ink-soft); margin:8px 0 22px 0; }
+
+  .btn-secondary{ background:none; border:1px solid var(--ink); color:var(--ink); padding:10px 20px; border-radius:var(--radius); font-size:14.5px; font-weight:600; }
+  .btn-secondary:hover{ background:var(--ink); color:var(--paper-white); }
+
+  .modal-overlay{ position:fixed; inset:0; background:rgba(28,37,65,0.45); display:flex; align-items:center; justify-content:center; padding:20px; z-index:100; }
+  .modal{ background:var(--paper-white); border-radius:var(--radius); width:100%; max-width:560px; max-height:88vh; overflow-y:auto; padding:30px 32px; }
+  .modal h2{ font-size:22px; margin-bottom:20px; }
+  .field{ margin-bottom:18px; }
+  .field label{ display:block; font-size:13.5px; font-weight:600; margin-bottom:6px; color:var(--ink-soft); }
+  .field input[type=text], .field textarea{ width:100%; font-family:inherit; font-size:14.5px; border:1px solid var(--line); border-radius:var(--radius); padding:10px 12px; background:var(--paper); color:var(--ink); }
+  .field textarea{ resize:vertical; min-height:160px; }
+  .field input:focus, .field textarea:focus{ outline:2px solid var(--highlighter); outline-offset:1px; }
+  .source-toggle{ display:flex; gap:8px; margin-bottom:16px; }
+  .source-toggle button{ flex:1; padding:9px; background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); font-size:14px; color:var(--ink-soft); }
+  .source-toggle button.active{ background:var(--ink); color:var(--paper-white); border-color:var(--ink); }
+  .file-drop{ border:1.5px dashed var(--line); border-radius:var(--radius); padding:26px; text-align:center; color:var(--ink-soft); font-size:14px; }
+  .file-drop input{ display:none; }
+  .file-drop .browse{ text-decoration:underline; text-decoration-color:var(--highlighter); text-decoration-thickness:2px; font-weight:600; color:var(--ink); }
+  .file-name{ margin-top:10px; font-size:13.5px; color:var(--ink); font-weight:600; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }
+  .btn-primary{ background:var(--ink); color:var(--paper-white); border:none; padding:11px 20px; border-radius:var(--radius); font-size:14.5px; font-weight:600; }
+  .btn-primary:hover{ background:#2A3660; }
+  .btn-primary:disabled{ opacity:0.5; cursor:default; }
+  .btn-ghost{ background:none; border:none; color:var(--ink-soft); padding:11px 14px; font-size:14.5px; }
+  .hint{ font-size:12.5px; color:var(--ink-soft); margin-top:6px; }
+
+  @media (max-width: 780px){
+    #app{ flex-direction:column; }
+    .binder{ width:100%; border-right:none; border-bottom:1px solid var(--line); padding:18px 16px; }
+    .course-list{ max-height:140px; }
+    .course-header, .content-pane{ padding-left:20px; padding-right:20px; }
+  }
+  :focus-visible{ outline:2px solid var(--highlighter); outline-offset:2px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     PARTIE 1 — MOTEUR D'ANALYSE DE TEXTE (100% local, sans IA)
+     ========================================================= */
+
+  var STOPWORDS = new Set((
+    "le la les un une des de du dans en et ou mais donc or ni car que qui quoi dont où se sa son ses leur leurs " +
+    "ce cet cette ces il elle ils elles on nous vous je tu est sont être avoir ont été étaient sera seront " +
+    "pour par avec sans sur sous entre vers chez pas plus très tout tous toute toutes comme ainsi alors aussi " +
+    "cela ceci celui celle y au aux qu quand comment pourquoi si non oui peut peuvent doit doivent fait faire " +
+    "leur autre autres même mêmes plusieurs chaque quelque quelques tant deux trois selon lors ici là encore " +
+    "the a an of in on and or but is are was were be been to for with as that this these those it its at by " +
+    "from which who whom not no so such than then there their them he she they we you i will would can could " +
+    "should may might must have has had do does did"
+  ).split(/\s+/));
+
+  var stripAccents = function(s){
+    return s.normalize ? s.normalize('NFD').replace(/[\u0300-\u036f]/g,'') : s;
+  };
+
+  function splitParagraphs(text){
+    return text.split(/\n\s*\n/).map(function(p){ return p.trim(); }).filter(Boolean);
+  }
+
+  function splitSentences(text){
+    var clean = text.replace(/\s+/g,' ').trim();
+    if(!clean) return [];
+    var parts = clean.split(/(?<=[.!?])\s+(?=[A-ZÀ-Ü0-9"«])/);
+    return parts.map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 1; });
+  }
+
+  function extractWords(str){
+    var m = str.match(/[A-Za-zÀ-ÖØ-öø-ÿ'’]+/g) || [];
+    return m;
+  }
+
+  function isSignificant(wordLower){
+    return wordLower.length >= 4 && !STOPWORDS.has(wordLower);
+  }
+
+  function isHeadingLine(line){
+    var t = line.trim();
+    if(!t || t.length > 90) return false;
+    if(/^(chapitre|partie|section|leçon|lecon|unité|unite|module|thème|theme|chapter|part|unit)\b/i.test(t)) return true;
+    if(/^([0-9]{1,2}|[IVXLCM]{1,6})[.\)]\s+\S/.test(t)) return true;
+    if(/^#{1,4}\s+\S/.test(t)) return true; // markdown heading
+    var endsWithPunct = /[.!?,;:]$/.test(t);
+    var hasLetters = /[A-ZÀ-Üa-zà-ÿ]/.test(t);
+    var upper = t === t.toUpperCase();
+    if(hasLetters && upper && !endsWithPunct && t.length <= 60) return true;
+    return false;
+  }
+
+  function cleanHeadingTitle(line){
+    return line.replace(/^#{1,4}\s+/, '')
+               .replace(/^([0-9]{1,2}|[IVXLCM]{1,6})[.\)]\s+/, '')
+               .replace(/^(chapitre|partie|section|leçon|lecon|unité|unite|module|thème|theme|chapter|part|unit)\s*[:\-]?\s*/i, '')
+               .trim();
+  }
+
+  function titleCase(s){
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  // Analyse principale : produit { overview, keyTopics:[{title, points:[]}], quiz:[...] }
+  function analyzeText(rawText){
+    var text = rawText.replace(/\r\n/g, '\n').trim();
+    if(text.length < 120){
+      throw new Error("Ce texte est trop court pour en tirer un résumé et un quiz fiables. Essaie avec un contenu de cours plus complet.");
+    }
+    if(text.length > 200000) text = text.slice(0, 200000);
+
+    var lines = text.split('\n');
+
+    // 1) Fréquence globale des mots significatifs (pour scorer les phrases et fabriquer le quiz)
+    var freq = {};
+    var displayForm = {};
+    extractWords(text).forEach(function(w){
+      var lw = stripAccents(w.toLowerCase());
+      if(!isSignificant(lw)) return;
+      freq[lw] = (freq[lw] || 0) + 1;
+      if(!displayForm[lw]) displayForm[lw] = w;
+    });
+
+    // 2) Détection de sections par titres explicites
+    var sections = [];
+    var current = null;
+    lines.forEach(function(line){
+      if(isHeadingLine(line)){
+        var title = cleanHeadingTitle(line) || line.trim();
+        current = { title: title, content: [] };
+        sections.push(current);
+      } else if(line.trim()){
+        if(!current){ current = { title: null, content: [] }; sections.push(current); }
+        current.content.push(line);
+      }
+    });
+    sections = sections.filter(function(s){ return s.content.join(' ').trim().length > 0; });
+
+    var useHeadingSections = sections.filter(function(s){ return s.title; }).length >= 2;
+
+    var topicsRaw;
+    if(useHeadingSections){
+      topicsRaw = sections.filter(function(s){ return s.title; }).map(function(s){
+        return { title: s.title, content: s.content.join('\n') };
+      });
+    } else {
+      var paragraphs = splitParagraphs(text);
+      if(paragraphs.length < 2) paragraphs = [text];
+      var targetCount = Math.max(2, Math.min(6, Math.round(paragraphs.length / 3)));
+      var bucketSize = Math.ceil(paragraphs.length / targetCount);
+      topicsRaw = [];
+      for(var i=0; i<paragraphs.length; i += bucketSize){
+        var chunkParas = paragraphs.slice(i, i + bucketSize);
+        var content = chunkParas.join('\n\n');
+        var localFreq = {};
+        extractWords(content).forEach(function(w){
+          var lw = stripAccents(w.toLowerCase());
+          if(!isSignificant(lw)) return;
+          localFreq[lw] = (localFreq[lw] || 0) + 1;
+        });
+        var topWords = Object.keys(localFreq).sort(function(a,b){ return localFreq[b]-localFreq[a]; }).slice(0,2);
+        var label = topWords.map(function(w){ return titleCase(displayForm[w] || w); }).join(' et ');
+        topicsRaw.push({ title: label || ('Partie ' + (topicsRaw.length+1)), content: content });
+      }
+    }
+
+    // 3) Pour chaque sujet : score des phrases et sélection des points clés
+    function scoreSentence(sentence, isFirstOfParagraph){
+      var words = extractWords(sentence);
+      if(words.length < 4 || words.length > 42) return -1;
+      var score = 0;
+      words.forEach(function(w){
+        var lw = stripAccents(w.toLowerCase());
+        if(isSignificant(lw) && freq[lw]) score += Math.sqrt(freq[lw]);
+      });
+      score = score / Math.sqrt(words.length);
+      if(isFirstOfParagraph) score *= 1.15;
+      if(/[0-9]/.test(sentence)) score *= 1.05;
+      return score;
+    }
+
+    function similar(a, b){
+      var wa = new Set(extractWords(a).map(function(w){ return stripAccents(w.toLowerCase()); }).filter(isSignificant));
+      var wb = new Set(extractWords(b).map(function(w){ return stripAccents(w.toLowerCase()); }).filter(isSignificant));
+      if(wa.size === 0 || wb.size === 0) return false;
+      var inter = 0;
+      wa.forEach(function(w){ if(wb.has(w)) inter++; });
+      return inter / Math.min(wa.size, wb.size) > 0.75;
+    }
+
+    var allScoredSentences = []; // pour l'aperçu global
+    var keyTopics = topicsRaw.map(function(topic){
+      var paras = splitParagraphs(topic.content);
+      if(paras.length === 0) paras = [topic.content];
+      var candidates = [];
+      paras.forEach(function(p){
+        var sents = splitSentences(p);
+        sents.forEach(function(s, idx){
+          var sc = scoreSentence(s, idx === 0);
+          if(sc > 0){
+            candidates.push({ text: s, score: sc, topicTitle: topic.title });
+            allScoredSentences.push({ text: s, score: sc });
+          }
+        });
+      });
+      candidates.sort(function(a,b){ return b.score - a.score; });
+      var picked = [];
+      for(var i=0; i<candidates.length && picked.length < 4; i++){
+        var c = candidates[i];
+        var dup = picked.some(function(p){ return similar(p.text, c.text); });
+        if(!dup) picked.push(c);
+      }
+      var minPoints = Math.max(2, Math.min(4, Math.round(candidates.length * 0.3)));
+      if(picked.length < Math.min(2, candidates.length)){
+        picked = candidates.slice(0, Math.min(2, candidates.length));
+      }
+      // remettre dans l'ordre d'origine du texte pour une lecture naturelle
+      picked.sort(function(a,b){ return candidates.indexOf(a) - candidates.indexOf(b); });
+      return {
+        title: topic.title || 'Sujet',
+        points: picked.map(function(p){ return p.text; })
+      };
+    }).filter(function(t){ return t.points.length > 0; });
+
+    // 4) Aperçu global (overview) : meilleures phrases toutes sections confondues
+    allScoredSentences.sort(function(a,b){ return b.score - a.score; });
+    var overviewSentences = [];
+    for(var j=0; j<allScoredSentences.length && overviewSentences.length < 2; j++){
+      var cand = allScoredSentences[j];
+      var dup = overviewSentences.some(function(p){ return similar(p, cand.text); });
+      if(!dup) overviewSentences.push(cand.text);
+    }
+    var overview = "Ce cours regroupe " + keyTopics.length + (keyTopics.length > 1 ? " sujets principaux" : " sujet principal") +
+      (keyTopics.length ? (" : " + keyTopics.map(function(t){ return t.title; }).join(', ') + ".") : ".") +
+      (overviewSentences.length ? (" " + overviewSentences.join(' ')) : '');
+
+    // 5) Génération du quiz — questions à texte à trous fabriquées à partir du cours lui-même
+    var keyTermsSorted = Object.keys(freq)
+      .filter(function(w){ return freq[w] >= 2; })
+      .sort(function(a,b){ return freq[b]-freq[a]; })
+      .slice(0, 30);
+
+    if(keyTermsSorted.length < 4){
+      // pas assez de répétitions : élargir aux mots significatifs même peu fréquents
+      keyTermsSorted = Object.keys(freq).sort(function(a,b){ return freq[b]-freq[a]; }).slice(0, 30);
+    }
+
+    var quizPool = [];
+    keyTopics.forEach(function(topic, tIdx){
+      var sents = [];
+      (topic.points || []).forEach(function(p){ sents.push(p); });
+      // on puise aussi dans le contenu complet du sujet, pas seulement les points retenus
+      var fullSents = splitSentences(topicsRaw[tIdx] ? topicsRaw[tIdx].content : '');
+      fullSents.forEach(function(s){ if(sents.indexOf(s) === -1) sents.push(s); });
+
+      sents.forEach(function(sentence){
+        var words = extractWords(sentence);
+        if(words.length < 6 || words.length > 30) return;
+        var bestTerm = null, bestFreq = 0, bestOriginal = null;
+        words.forEach(function(w, idx){
+          if(idx === 0) return; // éviter de faire sauter le premier mot (indice trop facile)
+          var lw = stripAccents(w.toLowerCase());
+          if(keyTermsSorted.indexOf(lw) !== -1 && freq[lw] > bestFreq){
+            bestFreq = freq[lw]; bestTerm = lw; bestOriginal = w;
+          }
+        });
+        if(bestTerm){
+          quizPool.push({ topicIdx: tIdx, sentence: sentence, term: bestTerm, original: bestOriginal });
+        }
+      });
+    });
+
+    var targetQCount = Math.max(4, Math.min(10, Math.round(quizPool.length / 3)));
+    var usedTerms = {};
+    var chosen = [];
+    // répartir les questions entre les sujets (round-robin)
+    var byTopic = {};
+    quizPool.forEach(function(q){ (byTopic[q.topicIdx] = byTopic[q.topicIdx] || []).push(q); });
+    Object.keys(byTopic).forEach(function(k){
+      byTopic[k].sort(function(a,b){ return freq[b.term]-freq[a.term]; });
+    });
+    var topicKeys = Object.keys(byTopic);
+    var round = 0;
+    while(chosen.length < targetQCount && round < 6){
+      var addedAny = false;
+      for(var ti=0; ti<topicKeys.length && chosen.length < targetQCount; ti++){
+        var list = byTopic[topicKeys[ti]];
+        var pick = (list || []).find(function(q){ return !usedTerms[q.term]; });
+        if(pick){
+          usedTerms[pick.term] = true;
+          chosen.push(pick);
+          addedAny = true;
+        }
+      }
+      round++;
+      if(!addedAny) break;
+    }
+
+    function buildDistractors(correctTerm){
+      var pool = keyTermsSorted.filter(function(t){
+        if(t === correctTerm) return false;
+        if(t.indexOf(correctTerm) !== -1 || correctTerm.indexOf(t) !== -1) return false;
+        return true;
+      });
+      // mélanger
+      for(var i = pool.length - 1; i > 0; i--){
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+      }
+      return pool.slice(0, 3);
+    }
+
+    var quiz = chosen.map(function(q){
+      var distractorsLower = buildDistractors(q.term);
+      if(distractorsLower.length < 3) return null;
+      var correctDisplay = titleCase(displayForm[q.term] || q.original);
+      var optionsLower = [q.term].concat(distractorsLower);
+      var options = optionsLower.map(function(t, idx){
+        return idx === 0 ? correctDisplay : titleCase(displayForm[t] || t);
+      });
+      // fisher-yates en gardant la trace de l'index correct
+      var order = options.map(function(_, idx){ return idx; });
+      for(var i = order.length - 1; i > 0; i--){
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+      }
+      var shuffledOptions = order.map(function(idx){ return options[idx]; });
+      var correctIndex = order.indexOf(0);
+
+      var blankRe = new RegExp('\\b' + q.original.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\b', 'gi');
+      var questionText = q.sentence.replace(blankRe, '______');
+
+      return {
+        question: questionText,
+        options: shuffledOptions,
+        correctIndex: correctIndex,
+        explanation: "Le mot manquant est « " + correctDisplay + " », comme dans le texte du cours : « " + q.sentence + " »"
+      };
+    }).filter(Boolean);
+
+    return { overview: overview, keyTopics: keyTopics, quiz: quiz };
+  }
+
+  /* =========================================================
+     PARTIE 2 — EXTRACTION DE TEXTE (PDF / DOCX / TXT)
+     ========================================================= */
+  if(window.pdfjsLib){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  function extractFromPdf(arrayBuffer){
+    return pdfjsLib.getDocument({data: arrayBuffer}).promise.then(function(pdf){
+      var pagePromises = [];
+      for(var i=1;i<=pdf.numPages;i++){
+        pagePromises.push(pdf.getPage(i).then(function(page){
+          return page.getTextContent().then(function(tc){
+            return tc.items.map(function(it){ return it.str; }).join(' ');
+          });
+        }));
+      }
+      return Promise.all(pagePromises).then(function(pages){ return pages.join('\n\n'); });
+    });
+  }
+
+  function extractFromDocx(arrayBuffer){
+    return mammoth.extractRawText({arrayBuffer: arrayBuffer}).then(function(res){ return res.value; });
+  }
+
+  function extractTextFromFile(file){
+    var name = file.name.toLowerCase();
+    return file.arrayBuffer().then(function(buf){
+      if(name.endsWith('.pdf')) return extractFromPdf(buf);
+      if(name.endsWith('.docx')) return extractFromDocx(buf);
+      return new TextDecoder('utf-8').decode(buf);
+    });
+  }
+
+  /* =========================================================
+     PARTIE 3 — APPLICATION (état, rendu, événements)
+     ========================================================= */
+  var state = {
+    courses: [],
+    activeCourseId: null,
+    activeTab: 'summary',
+    modal: null
+  };
+  var STORAGE_COURSES = 'etudio_courses_v2';
+
+  function loadState(){
+    try{
+      var c = localStorage.getItem(STORAGE_COURSES);
+      state.courses = c ? JSON.parse(c) : [];
+    }catch(e){ state.courses = []; }
+    if(state.courses.length) state.activeCourseId = state.courses[0].id;
+  }
+  function saveCourses(){ localStorage.setItem(STORAGE_COURSES, JSON.stringify(state.courses)); }
+  function getActiveCourse(){ return state.courses.find(function(c){ return c.id === state.activeCourseId; }) || null; }
+
+  function addCourse(title, sourceText){
+    var course = {
+      id: 'c_' + Date.now(),
+      title: title || 'Cours sans titre',
+      sourceText: sourceText,
+      status: 'loading',
+      error: null,
+      overview: '', keyTopics: [], quiz: [],
+      quizState: { index: 0, selected: null, answers: [] }
+    };
+    state.courses.unshift(course);
+    state.activeCourseId = course.id;
+    state.activeTab = 'summary';
+    state.modal = null;
+    saveCourses();
+    render();
+    setTimeout(function(){ processCourse(course.id); }, 30);
+  }
+
+  function processCourse(id){
+    var course = state.courses.find(function(c){ return c.id === id; });
+    if(!course) return;
+    course.status = 'loading';
+    course.error = null;
+    saveCourses(); render();
+    setTimeout(function(){
+      try{
+        var result = analyzeText(course.sourceText);
+        course.overview = result.overview;
+        course.keyTopics = result.keyTopics;
+        course.quiz = result.quiz;
+        course.quizState = { index: 0, selected: null, answers: [] };
+        course.status = 'ready';
+      }catch(err){
+        course.status = 'error';
+        course.error = err.message || String(err);
+      }
+      saveCourses(); render();
+    }, 30);
+  }
+
+  function deleteCourse(id, ev){
+    if(ev) ev.stopPropagation();
+    state.courses = state.courses.filter(function(c){ return c.id !== id; });
+    if(state.activeCourseId === id) state.activeCourseId = state.courses.length ? state.courses[0].id : null;
+    saveCourses(); render();
+  }
+  function selectCourse(id){ state.activeCourseId = id; state.activeTab = 'summary'; render(); }
+
+  function answerQuestion(optIndex){
+    var course = getActiveCourse(); if(!course) return;
+    var qs = course.quizState;
+    if(qs.selected !== null) return;
+    qs.selected = optIndex;
+    qs.answers[qs.index] = optIndex;
+    saveCourses(); render();
+  }
+  function nextQuestion(){
+    var course = getActiveCourse(); if(!course) return;
+    course.quizState.index += 1;
+    course.quizState.selected = null;
+    saveCourses(); render();
+  }
+  function retakeQuiz(){
+    var course = getActiveCourse(); if(!course) return;
+    course.quizState = { index: 0, selected: null, answers: [] };
+    saveCourses(); render();
+  }
+
+  function esc(s){
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  function renderSidebar(){
+    var items = state.courses.map(function(c){
+      var activeCls = c.id === state.activeCourseId ? ' active' : '';
+      return '<li class="course-item' + activeCls + '" data-select="' + c.id + '">' +
+        '<span class="title">' + esc(c.title) + '</span>' +
+        '<button class="del" data-del="' + c.id + '" aria-label="Supprimer ce cours">✕</button>' +
+        '</li>';
+    }).join('');
+    return (
+      '<div class="binder">' +
+        '<div class="brand"><span class="mark"></span><h1>Étudio</h1></div>' +
+        '<p class="tagline">Comprendre, pas juste relire.</p>' +
+        '<ul class="course-list">' + items + '</ul>' +
+        '<button class="add-btn" data-open="add">+ Ajouter un cours</button>' +
+        '<p class="about-note">Analyse 100% locale dans ton navigateur — aucune donnée envoyée nulle part.</p>' +
+      '</div>'
+    );
+  }
+
+  function renderEmptyState(){
+    return (
+      '<div class="empty-state"><div class="empty-card">' +
+        '<h2>Ton premier cours</h2>' +
+        '<p>Colle le texte d\'un cours ou dépose un PDF/Word. Étudio en extrait les sujets importants et les points clés, puis te teste avec un quiz généré à partir de ton propre texte.</p>' +
+        '<button class="btn-primary" data-open="add">+ Ajouter un cours</button>' +
+      '</div></div>'
+    );
+  }
+
+  function renderLoading(){
+    return '<div class="loading-box"><div class="spinner"></div><p>Analyse du texte, extraction des sujets et du quiz…</p></div>';
+  }
+
+  function renderErrorBlock(course){
+    return (
+      '<div class="error-box"><strong>Ça n\'a pas fonctionné</strong>' + esc(course.error) + '</div>' +
+      '<div style="max-width:520px;text-align:center;"><button class="btn-secondary" data-retry="' + course.id + '">Réessayer</button></div>'
+    );
+  }
+
+  function renderSummary(course){
+    var topics = course.keyTopics.map(function(t){
+      var points = (t.points || []).map(function(p){ return '<li>' + esc(p) + '</li>'; }).join('');
+      return '<div class="topic-block"><h3>' + esc(t.title) + '</h3><ul>' + points + '</ul></div>';
+    }).join('');
+    return (
+      '<p class="overview">' + esc(course.overview) + '</p>' +
+      topics +
+      '<div style="margin-top:10px;"><button class="btn-secondary" data-regenerate="' + course.id + '">Régénérer le quiz</button></div>'
+    );
+  }
+
+  function renderQuiz(course){
+    var quiz = course.quiz || [];
+    if(!quiz.length){
+      return '<p style="color:var(--ink-soft)">Le texte fourni ne contient pas assez de répétitions de termes clés pour fabriquer un quiz fiable. Essaie avec un cours plus complet.</p>';
+    }
+    var qs = course.quizState;
+    if(qs.index >= quiz.length){
+      var correct = qs.answers.reduce(function(acc, a, i){ return acc + (a === quiz[i].correctIndex ? 1 : 0); }, 0);
+      return (
+        '<div class="score-card"><div class="num">' + correct + ' / ' + quiz.length + '</div>' +
+        '<p>bonnes réponses</p>' +
+        '<button class="btn-secondary" data-retake="' + course.id + '">Refaire le quiz</button></div>'
+      );
+    }
+    var q = quiz[qs.index];
+    var pct = Math.round((qs.index / quiz.length) * 100);
+    var optionsHtml = q.options.map(function(opt, i){
+      var cls = 'option';
+      if(qs.selected !== null){
+        if(i === q.correctIndex) cls += ' correct';
+        else if(i === qs.selected) cls += ' incorrect';
+      }
+      var disabled = qs.selected !== null ? 'disabled' : '';
+      return '<button class="' + cls + '" ' + disabled + ' data-answer="' + i + '">' + esc(opt) + '</button>';
+    }).join('');
+    var explanation = '', nextBtn = '';
+    if(qs.selected !== null){
+      explanation = '<div class="explanation">' + esc(q.explanation || '') + '</div>';
+      var isLast = qs.index === quiz.length - 1;
+      nextBtn = '<button class="next-btn" data-next="1">' + (isLast ? 'Voir mon score' : 'Question suivante') + '</button>';
+    }
+    var questionHtml = esc(q.question).replace('______', '<span class="blank">______</span>');
+    return (
+      '<div class="quiz-progress"><span>Question ' + (qs.index+1) + ' / ' + quiz.length + '</span>' +
+        '<div class="bar"><div class="fill" style="width:' + pct + '%"></div></div></div>' +
+      '<div class="quiz-card"><h3>' + questionHtml + '</h3>' + optionsHtml + explanation + nextBtn + '</div>'
+    );
+  }
+
+  function renderCourseView(course){
+    var tabsHtml =
+      '<div class="tabs">' +
+        '<button class="tab' + (state.activeTab==='summary'?' active':'') + '" data-tab="summary">Résumé</button>' +
+        '<button class="tab' + (state.activeTab==='quiz'?' active':'') + '" data-tab="quiz">Quiz</button>' +
+      '</div>';
+    var body = '';
+    if(course.status === 'loading') body = renderLoading();
+    else if(course.status === 'error') body = renderErrorBlock(course);
+    else if(state.activeTab === 'summary') body = renderSummary(course);
+    else body = renderQuiz(course);
+    return (
+      '<div class="course-header"><h2>' + esc(course.title) + '</h2>' + tabsHtml + '</div>' +
+      '<div class="content-pane">' + body + '</div>'
+    );
+  }
+
+  function renderAddModal(){
+    var src = state._addSource || 'paste';
+    var fileName = state._addFileName || '';
+    return (
+      '<div class="modal-overlay" data-overlay="1"><div class="modal" data-stop="1">' +
+        '<h2>Ajouter un cours</h2>' +
+        '<div class="field"><label>Titre du cours</label>' +
+          '<input type="text" id="titleInput" placeholder="Ex : Chapitre 4 — La photosynthèse"></div>' +
+        '<div class="source-toggle">' +
+          '<button class="' + (src==='paste'?'active':'') + '" data-src="paste">Coller le texte</button>' +
+          '<button class="' + (src==='file'?'active':'') + '" data-src="file">Importer un fichier</button>' +
+        '</div>' +
+        (src === 'paste'
+          ? '<div class="field"><textarea id="pasteInput" placeholder="Colle ici le contenu de ton cours…"></textarea></div>'
+          : '<div class="field"><div class="file-drop">' +
+              '<label class="browse" for="fileInput">Choisir un fichier</label> (PDF, Word .docx ou .txt)' +
+              '<input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md">' +
+              (fileName ? '<div class="file-name">' + esc(fileName) + '</div>' : '') +
+            '</div></div>'
+        ) +
+        '<div class="modal-actions">' +
+          '<button class="btn-ghost" data-close="1">Annuler</button>' +
+          '<button class="btn-primary" id="submitAdd">Créer le cours</button>' +
+        '</div>' +
+      '</div></div>'
+    );
+  }
+
+  function render(){
+    var html = '<div id="app">' + renderSidebar();
+    var course = getActiveCourse();
+    html += '<main>' + (course ? renderCourseView(course) : renderEmptyState()) + '</main>';
+    html += '</div>';
+    if(state.modal === 'add') html += renderAddModal();
+    document.getElementById('app').outerHTML = html;
+    attachEvents();
+  }
+
+  function attachEvents(){
+    var root = document;
+    root.querySelectorAll('[data-select]').forEach(function(el){
+      el.addEventListener('click', function(){ selectCourse(el.getAttribute('data-select')); });
+    });
+    root.querySelectorAll('[data-del]').forEach(function(el){
+      el.addEventListener('click', function(ev){ deleteCourse(el.getAttribute('data-del'), ev); });
+    });
+    root.querySelectorAll('[data-open]').forEach(function(el){
+      el.addEventListener('click', function(){
+        state.modal = el.getAttribute('data-open');
+        state._addSource = 'paste'; state._addFileName = ''; state._addFileText = '';
+        render();
+      });
+    });
+    root.querySelectorAll('[data-tab]').forEach(function(el){
+      el.addEventListener('click', function(){ state.activeTab = el.getAttribute('data-tab'); render(); });
+    });
+    root.querySelectorAll('[data-retry]').forEach(function(el){
+      el.addEventListener('click', function(){ processCourse(el.getAttribute('data-retry')); });
+    });
+    root.querySelectorAll('[data-regenerate]').forEach(function(el){
+      el.addEventListener('click', function(){ processCourse(el.getAttribute('data-regenerate')); });
+    });
+    root.querySelectorAll('[data-answer]').forEach(function(el){
+      el.addEventListener('click', function(){ answerQuestion(parseInt(el.getAttribute('data-answer'),10)); });
+    });
+    root.querySelectorAll('[data-next]').forEach(function(el){ el.addEventListener('click', nextQuestion); });
+    root.querySelectorAll('[data-retake]').forEach(function(el){ el.addEventListener('click', retakeQuiz); });
+    root.querySelectorAll('[data-overlay]').forEach(function(el){ el.addEventListener('click', function(){ state.modal = null; render(); }); });
+    root.querySelectorAll('[data-stop]').forEach(function(el){ el.addEventListener('click', function(ev){ ev.stopPropagation(); }); });
+    root.querySelectorAll('[data-close]').forEach(function(el){ el.addEventListener('click', function(){ state.modal = null; render(); }); });
+    root.querySelectorAll('[data-src]').forEach(function(el){
+      el.addEventListener('click', function(){
+        state._addSource = el.getAttribute('data-src');
+        render();
+        var t = document.getElementById('titleInput');
+        if(t) t.focus();
+      });
+    });
+    var fileInput = document.getElementById('fileInput');
+    if(fileInput){
+      fileInput.addEventListener('change', function(ev){
+        var file = ev.target.files[0];
+        if(!file) return;
+        state._addFileName = file.name + ' (lecture en cours…)';
+        render();
+        extractTextFromFile(file).then(function(text){
+          state._addFileText = text;
+          state._addFileName = file.name + ' — ' + text.length + ' caractères extraits';
+          render();
+        }).catch(function(err){
+          state._addFileName = 'Erreur de lecture : ' + err.message;
+          render();
+        });
+      });
+    }
+    var submitAdd = document.getElementById('submitAdd');
+    if(submitAdd){
+      submitAdd.addEventListener('click', function(){
+        var title = (document.getElementById('titleInput') || {}).value || '';
+        var text = state._addSource === 'paste'
+          ? ((document.getElementById('pasteInput') || {}).value || '')
+          : (state._addFileText || '');
+        if(!text.trim()){ alert('Ajoute du texte ou un fichier avant de créer le cours.'); return; }
+        addCourse(title.trim(), text.trim());
+      });
+    }
+  }
+
+  loadState();
+  render();
+})();
+</script>
+</body>
+</html>
